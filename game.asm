@@ -33,20 +33,162 @@
 # - (write here, if any)
 #
 #####################################################################
+.eqv BASE_ADDRESS 	0x10008000
+.eqv top_row	  	0x10008100 	#code of first pixel in second row
+.eqv num_pixels	  	0x1000
+.eqv bottom_left_corner	0x1000BF00 
+.eqv jump_amount	1024
+.eqv red		0xff0000
+.eqv black		0x000000
+
+.data
+position:	.word 	0
+enemies:	.word	0:7
 
 
-.eqv BASE_ADDRESS 0x10008000
-.eqv sleep	  60 #time to sleep in ms
 .text
-li $t0, BASE_ADDRESS # $t0 stores the base address for display
-li $t1, 0xff0000 # $t1 stores the red colour code
-li $t2, 0x00ff00 # $t2 stores the green colour code
-li $t3, 0x0000ff # $t3 stores the blue colour code
-sw $t1, 0($t0) # paint the first (top-left) unit red.
-sw $t2, 4($t0) # paint the second unit on the first row green. Why $t0+4?
-sw $t3, 256($t0) # paint the first unit on the second row blue. Why +256?
-li $v0, 10 # terminate the program gracefully
-syscall
+#t0, t1 - temp variables, #t2 - character position
+.globl main
+main:
+	#clear screen
+	li $t5, BASE_ADDRESS #start from top left corner
+	li $t6, num_pixels
+clear:	li $t0, black
+	sw $t0, 0($t5)
+	addi $t5, $t5, 4
+	addi $t6, $t6, -1
+	bnez $t6, clear
+	
+	#store initial position in memory
+	li $t5, bottom_left_corner	
+	sw $t5, position
+	#initial state
+	li $t0, red
+	li $a0, 0
+	jal redraw_character
+	
+	
+	
+	
+main_loop:
+	#Check for keyboard input.
+	li $t9, 0xffff0000
+	lw $t8, 0($t9)
+	beq $t8, 1, keypress_happened
+	
+	#Figure out if the player character is standing on a platform.
+	#Update player location, enemies, platforms, power ups, etc.
+	blt $t5, bottom_left_corner, gravity	#if player isnt on a platform, gravity to bottom row
+	#Check for various collisions (e.g., between player and enemies).
+	#Update other game state and end of game.
+	#Erase objects from the old position on the screen.
+	#Redraw objects in the new position on the screen.
+	j main_loop
+	
+redraw_character: #redraw(old pos, offset) erases the charater at old_pos and redraws at old_pos + offset
+	          #position is the location of the bottom-most, left-most framebuffer unit of the character
+	          #arguments provided using stack? a0-a3? position could be stored in memory after each move
+	          
+	        li $t0, black		#load background colour
+	        sw $t0, ($t5)		#delete old pos
+		sw $t0, 4($t5)
+		sw $t0, 8($t5)
+		sw $t0, -256($t5)
+		sw $t0, -512($t5)
+		sw $t0, -768($t5)
+		
+		add, $t5, $t5, $a0	#move character
+		
+	        li $t0, red		#load character colour
+	        sw $t0, 0($t5) #red square is our character
+		sw $t0, 4($t5)
+		sw $t0, 8($t5)
+		sw $t0, -256($t5)
+		sw $t0, -512($t5)
+		sw $t0, -768($t5)
+		jr $ra
+	
+keypress_happened:
+	lw $t4, 4($t9)
+	beq $t4, 0x61, respond_to_a
+	beq $t4, 0x64, respond_to_d
+	beq $t4, 0x77, respond_to_w
+	#beq $t4, 0x73, respond_to_s
+	beq $t4, 0x6B, main 	 #respond_to_k
+	j main_loop
+	
+	
+respond_to_a: 
+	#li $t0, black		#load background colour
+	#sw $t0, ($t5)		#delete old pos
+	#subi $t5, $t5, 4	#move
+	#li $t0, red		#load character colour
+	#sw $t0, ($t5)		#draw new pos
+	li $a0, -4
+	jal redraw_character
+	j sleep
+	
+respond_to_d: 
+	#li $t0, black		#load background colour
+	#sw $t0, ($t5)		#delete old pos
+	#addi $t5, $t5, 4	#move
+	#li $t0, red		#load character colour
+	#sw $t0, ($t5)		#draw new pos
+	li $a0, 4
+	jal redraw_character
+	j sleep
+	
+respond_to_w: 
+	#should only happen if the character is on a platform (or double jump)
+	blt $t5, top_row, sleep #don't move past the top of the screen
+	li $t1, jump_amount
+jump:	#li $t0, black		#load background colour	
+	#sw $t0, ($t5)		#delete old pos
+	#subi $t5, $t5, 256	#move
+	#li $t0, red		#load character colour
+	#sw $t0, ($t5)		#draw new pos
+	li $a0, -256
+	jal redraw_character
+	subi $t1, $t1, 256
+	li $v0, 32		#sleep for a bit
+	li $a0, 50
+	syscall
+	bnez $t1, jump
+	j sleep
+	
+#respond_to_s: 
+	#li $t0, black		#load background colour
+	#sw $t0, ($t5)		#delete old pos
+	#addi $t5, $t5, 256	#move
+	#li $t0, red		#load character colour
+	#sw $t0, ($t5)		#draw new pos
+	#li $a0, 256
+	#jal redraw_character
+	#j sleep
+
+	
+gravity:#li $t0, black		#load background colour	
+	#sw $t0, ($t5)		#delete old pos
+	#addi $t5, $t5, 256	#move
+	#li $t0, red		#load character colour
+	#sw $t0, ($t5)		#draw new pos
+	li $a0, 256
+	jal redraw_character
+	#addi $t1, $t1, 256
+	li $v0, 32
+	li $a0, 5
+	syscall
+	#bne $t1, jump_amount, gravity
+	j sleep
+
+
+sleep:	li $v0, 32
+	li $a0, 50
+	syscall
+	j main_loop
+	
+end:	li $v0, 10 # terminate the program gracefully
+	syscall
 
 
 
