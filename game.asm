@@ -55,6 +55,7 @@
 .eqv e_eye_light	0xede7f6
 	#setting
 .eqv background		0x9e9e9e
+.eqv goal_c		0xffeb3b
 #.eqv platform_l		0x607d8b
 .eqv platform		0x546e7a
 
@@ -85,9 +86,7 @@ clear:	sw $t0, 0($t1)
 	addi $t6, $t6, -1
 	bnez $t6, clear
 	
-#draw_level
-	
-	#draw bottom level
+	#draw floor
 	li $t0, platform
 	li $t1, floor
 	li $t6, 256 		#64*4 units
@@ -111,7 +110,7 @@ bottom:	sw $t0, 0($t1)
 	
 	 #second platform
 	li $t1, BASE_ADDRESS	
-	addi $t1, $t1, 3264
+	addi $t1, $t1, 4544
 	addi $t0, $t0, 4
 	sw $t1, ($t0)		#store the second platform's address
 	addi $t0, $t0, 4
@@ -120,7 +119,7 @@ bottom:	sw $t0, 0($t1)
 	
 	 #third platform
 	li $t1, BASE_ADDRESS	#platform3
-	addi $t1, $t1, 6460
+	addi $t1, $t1, 6716
 	addi $t0, $t0, 4
 	sw $t1 ($t0)		#store the third platform's address
 	addi $t0, $t0, 4
@@ -141,7 +140,7 @@ bottom:	sw $t0, 0($t1)
 	jal draw_platforms	#call function
 	
 	#draw goal
-	
+	jal draw_goal
 	
 	#draw health
 
@@ -163,6 +162,8 @@ main_loop:
 	lw $t8, 0($t9)
 	beq $t8, 1, keypress_happened
 	
+	jal check_win
+	
 	#Figure out if the player character is standing on a platform.
 		#check if either foot is above a unit with colour platform
 		#left foot is at position, right foot is at position+8
@@ -172,7 +173,9 @@ main_loop:
 	#Update player location, enemies, platforms, power ups, etc.
 	j gravity	#if player isnt on a platform, gravity to bottom row
 	
+	
 	#Check for various collisions (e.g., between player and enemies).
+	
 	#Update other game state and end of game.
 	#Erase objects from the old position on the screen.
 	#Redraw objects in the new position on the screen.
@@ -184,7 +187,7 @@ keypress_happened:
 	beq $t4, 0x61, respond_to_a
 	beq $t4, 0x64, respond_to_d
 	beq $t4, 0x77, respond_to_w
-	beq $t4, 0x6B, main 	 #respond_to_k
+	beq $t4, 0x70, main 	 #restart if p
 	j main_loop
 	
 	
@@ -229,6 +232,17 @@ gravity:
 	jal redraw_character
 	j sleep
 	
+check_win: #checks if the player has won
+	move $t0, $s0		#t0 holds character position
+	addi $t0, $t0, -752 	#start from bottom right corner of head & check right side
+	addi $t2, $s0, -1776	#end at top right corner of head
+win_cond:
+	lw $t1, 4($t0) 	#check bit beside body
+	beq $t1, goal_c, end #replace end with win screen
+	beq $t0, $t2, no_win
+	addi $t0, $t0, -256
+	j win_cond 
+no_win:	jr $ra
 	
 on_ground: #returns 1 if it's on a platform/ground, 0 if not
 	move $t0, $s0
@@ -249,6 +263,36 @@ false:	li $v0, 0
 true:	li $v0, 1
 return:	jr $ra
 
+
+draw_goal:
+	li $t0, goal_c		#load platform colour
+	li $t4, 4		#counter
+	addi $t1, $zero, BASE_ADDRESS
+	addi $t1, $t1, 2276	#start 1020 away from BASE_ADDRESS
+	
+	sub $t5, $t1, BASE_ADDRESS #calculate offset from first pixel
+	la $t6, level
+	add $t6, $t6, $t5	   #t6 = level[start_pixel]
+	
+	li $t2, 9		#t2 = 6 is the height of the goal
+	li $t3, 6		#t3 = 6 is the height of the goal
+goal_rp:sw $t0, 0($t1)		#draw one row of the platform
+	sw $t0, ($t6)		#store colour in level
+	addi $t1, $t1, 4
+	addi $t6, $t6, 4	#move to next index in level array
+	addi $t3, $t3, -1
+	bnez $t3, goal_rp
+	subi $t1, $t1, 24
+	addi $t1, $t1, 256
+	subi $t6, $t6, 24	#next row in level array
+	addi $t6, $t6, 256	
+	li $t3, 6
+	addi $t2, $t2, -1
+	bnez $t2, goal_rp
+	
+	jr $ra	
+
+
 draw_platforms: #draws platforms in defined in list at address provided as an argument
 	li $t0, platform	#load platform colour
 	li $t4, 4		#counter
@@ -259,7 +303,7 @@ draw_p:	lw $t1, ($a0)		#start drawing platform from t1 = $a0[0] = top left corne
 	add $t6, $t6, $t5	   #t6 = level[start_pixel]
 	add $t5, $t6, $zero	   #t5 = level[start_pixel]
 	
-	li $t2, 3		#3 is the height of the platform
+	li $t2, 2		#2 is the height of the platform
 	lw $t3, 4($a0)		#t3 = $a0[1] = length of platform
 row:	sw $t0, 0($t1)		#draw one row of the platform
 	sw $t0, ($t6)		#store colour in level
