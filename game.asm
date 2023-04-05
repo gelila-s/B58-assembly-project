@@ -207,10 +207,13 @@ respond_to_d:
 	
 respond_to_w: 
 	#should only happen if the character is on a platform (or double jump)
-	li $t9, jump_amount	#t1=number of pixels to be jumped
+	li $t9, jump_amount	#t9=number of pixels to be jumped
+	subi $t2, $t9, 256	#one row less than t9
+	
+	
 	blt $s0, top_row, sleep #don't move past the top of the screen
 	jal on_ground		#check if player is currently on the ground
-	beq $v0, $zero, sleep
+	beq $v0, $zero, sleep   #if not, sleep
 #	add $s0, $s0, $t1	#check if the character is a jump away from some platform
 #	ble $s0, bottom_right_corner, dj
 #	sub $s0, $s0, $t1	#restoring player position
@@ -223,12 +226,20 @@ jump:
 	li $a0, -256
 	jal redraw_character
 	subi $t9, $t9, 256
+	bge $t9, $t2, dj	#check for double jump
 	bnez $t9, jump
 	j sleep
+dj:	li $t7, 0xffff0000	#check for second keypress (double jump)
+	lw $t8, 0($t7)
+	beq $t8, 0, jump		#if no second keypress, single jump
+	lw $t4, 4($t7)
+	bne $t4, 0x77, jump	#if second keypress wasn't a w, single jump
+	sll $t9, $t9, 1		#otherwise, double the jump amount
+	j jump			#go back to jump
 
 gravity:
 	li $a0, 256
-	sw $zero, double_jump
+	#sw $zero, double_jump
 	jal redraw_character
 	j sleep
 	
