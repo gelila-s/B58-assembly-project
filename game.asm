@@ -43,6 +43,9 @@
 .eqv floor			0x1000BC00
 .eqv above_floor		0x1000BB00
 
+.eqv alive 			1
+.eqv dead			0
+
 #COLOURS		
 .eqv black		0x000000
 	#character
@@ -51,22 +54,31 @@
 .eqv c_skin		0xc68642
 	#enemies
 .eqv e_body		0x009687
-.eqv e_eye_dark		0xd1c4e9
-.eqv e_eye_light	0xede7f6
+#.eqv e_eye_dark		0xd1c4e9
+.eqv e_eye		0xede7f6
 	#setting
 .eqv background		0x9e9e9e
 .eqv goal_c		0xffeb3b
+.eqv heart_c		0xc62828  
 #.eqv platform_l		0x607d8b
 .eqv platform		0x546e7a
 
 .data
 position:	.word 	0x1000BF00  #s0
-direction: 	.word 	0
-enemies:	.word	0:7
+health: 	.word 	3
+#direction: 	.word 	0
+#enemies:	.word	0:7
 double_jump: 	.word	0:1
 platforms1: 	.word 	0:8 	#even indices are the top left corner of the platform, odd indices are the size of the
 				#platform at the index before (ex. a platform starts at platforms1[0] and is 
 				#platforms1[1] units long
+enemies1:	.word   0:4	#enemies[0] is the address of the enemy on platform[0]
+				
+enemy2:		.word	0:5	#enemy[0] is the alive status of the enemy 0 = dead, 1 = alive
+enemy3:	.word 	0:5	#enemy[1] is the position of the enemy
+				#enemy[2] is the left end of the platform it is on
+				#enemy[3] is the right end of the platform it is on
+				#enemy[4] is the direction the enemy is moving in, 0 for left, 1 for right
 level: 		.word 	0:4096
 
 
@@ -101,50 +113,96 @@ bottom:	sw $t0, 0($t1)
 	
 	 #first platform
 	li $t1, BASE_ADDRESS	
-	addi $t1, $t1, 12620
+	addi $t1, $t1, 4544
+	
 	sw $t1, ($t0)		#store the first platform's address
 	addi $t0, $t0, 4
 	li $t1, 16
 	sw $t1, ($t0)		#store the first platform's width
 	
-	
 	 #second platform
 	li $t1, BASE_ADDRESS	
-	addi $t1, $t1, 4544
-	addi $t0, $t0, 4
-	sw $t1, ($t0)		#store the second platform's address
-	addi $t0, $t0, 4
-	li $t1, 16
-	sw $t1, ($t0)		#store the third platform's width
-	
-	 #third platform
-	li $t1, BASE_ADDRESS	#platform3
 	addi $t1, $t1, 6716
 	addi $t0, $t0, 4
-	sw $t1 ($t0)		#store the third platform's address
+	sw $t1 ($t0)		#store the second platform's address
+	addi $t0, $t0, 4
+	li $t1, 24
+	sw $t1, ($t0)		#store the second platform's width
+	
+	 #third platform
+	li $t1, BASE_ADDRESS	
+	addi $t1, $t1, 10140
+	addi $t0, $t0, 4
+	sw $t1, ($t0)		#store the third platform's address
 	addi $t0, $t0, 4
 	li $t1, 24
 	sw $t1, ($t0)		#store the third platform's width
 	
 	 #fourth platform
 	li $t1, BASE_ADDRESS	
-	addi $t1, $t1, 10140
+	addi $t1, $t1, 12620
 	addi $t0, $t0, 4
 	sw $t1, ($t0)		#store the fourth platform's address
 	addi $t0, $t0, 4
-	li $t1, 24
+	li $t1, 16
 	sw $t1, ($t0)		#store the fourth platform's width
 	
 	 #draw the platforms
 	la $a0, platforms1	#argument is platforms1
 	jal draw_platforms	#call function
 	
+	
+	
+	#fill out the details of enemy2
+	la $t0, enemies1	#load adresses
+	la $t1, enemy2
+	sw $t1, 4($t0)	#store the address of enemy2 in enemies1[1] (second element of the array)
+	
+	la $t2, platforms1
+	
+	li $t0, alive	#set status to alive
+	sw $t0, ($t1)	
+	lw $t0, 8($t2)  #t0 = position of platform2
+	subi $t0, $t0, 256  #set enemy2 on top of platform2
+	sw $t0, 4($t1)	#set enemy2 position
+	sw $t0, 8($t1) 	#set left side of platform2
+	lw $t3, 12($t2) #get length of platform2
+	sll $t3, $t3, 2 #multiply length by 4
+	subi $t3, $t3, 16
+	add $t0, $t0, $t3 #add length to start of platform to get end of platform
+	sw $t0, 12($t1)	#set position of right side of platform2
+	li $t0, 1
+	sw $t0, 16($t1) #set direction to right
+	
+	#fill out the details of enemy3
+	la $t0, enemies1	#load adresses
+	la $t1, enemy3
+	sw $t1, 8($t0)	#store the address of enemy3 in enemies1[2] (third element of the array)
+	
+	la $t2, platforms1
+	
+	li $t0, alive	#set status to alive
+	sw $t0, ($t1)	
+	lw $t0, 16($t2)  #t0 = position of platform3
+	subi $t0, $t0, 256  #set enemy2 on top of platform3
+	sw $t0, 4($t1)	#set enemy3 position
+	sw $t0, 8($t1) 	#set left side of platform3
+	lw $t3, 20($t2) #get length of platform3
+	sll $t3, $t3, 2 #multiply length by 4
+	subi $t3, $t3, 16 #subtract length of the enemy
+	add $t0, $t0, $t3 #add length to start of platform to get end of platform
+	sw $t0, 12($t1)	#set position of right side of platform2
+	li $t0, 1
+	sw $t0, 16($t1) #set direction to right
+	
+	
 	#draw goal
 	jal draw_goal
 	
 	#draw health
-
-
+	li $t0, 3
+	sw $t0, health 		#set health to 3
+	jal draw_health
 	
 	#store initial position in memory
 	li $s0, above_floor
@@ -164,6 +222,12 @@ main_loop:
 	
 	jal check_win
 	
+	jal enemy_contact
+	
+	la $a0, enemies1 #load enemies1 as argument for move_enemies
+
+	jal move_enemies
+	
 	#Figure out if the player character is standing on a platform.
 		#check if either foot is above a unit with colour platform
 		#left foot is at position, right foot is at position+8
@@ -175,11 +239,10 @@ main_loop:
 	
 	
 	#Check for various collisions (e.g., between player and enemies).
-	
-	#Update other game state and end of game.
-	#Erase objects from the old position on the screen.
-	#Redraw objects in the new position on the screen.
+
 	j main_loop
+	
+   
 	
 	
 keypress_happened:
@@ -193,24 +256,23 @@ keypress_happened:
 	
 respond_to_a: 
 	li $t1, 1		#change direction
-	sw $t1, direction
+	#sw $t1, direction
 	li $a0, -4
 	jal redraw_character
 	j sleep
 	
 respond_to_d: 
 	li $t1, 0		#change direction
-	sw $t1, direction
+	#sw $t1, direction
 	li $a0, 4
 	jal redraw_character
 	j sleep
 	
 respond_to_w: 
 	#should only happen if the character is on a platform (or double jump)
-	li $t9, jump_amount	#t9=number of pixels to be jumped
-	subi $t2, $t9, 256	#one row less than t9
-	
-	
+	li $s1, jump_amount	#t9=number of pixels to be jumped
+	subi $s2, $s1, 256	#one row less than t9
+
 	blt $s0, top_row, sleep #don't move past the top of the screen
 	jal on_ground		#check if player is currently on the ground
 	beq $v0, $zero, sleep   #if not, sleep
@@ -225,16 +287,21 @@ respond_to_w:
 jump:
 	li $a0, -256
 	jal redraw_character
-	subi $t9, $t9, 256
-	bge $t9, $t2, dj	#check for double jump
-	bnez $t9, jump
+	la $a0, enemies1 #load enemies1 as argument for move_enemies
+	jal move_enemies
+	jal enemy_contact
+	beq $v1, 1, gravity	#end jump if enemy hit
+	
+	subi $s1, $s1, 256
+	bge $s1, $s2, dj	#check for double jump
+	bnez $s1, jump
 	j sleep
 dj:	li $t7, 0xffff0000	#check for second keypress (double jump)
-	lw $t8, 0($t7)
-	beq $t8, 0, jump		#if no second keypress, single jump
+	lw $t6, 0($t7)
+	beq $t6, 0, jump		#if no second keypress, single jump
 	lw $t4, 4($t7)
 	bne $t4, 0x77, jump	#if second keypress wasn't a w, single jump
-	sll $t9, $t9, 1		#otherwise, double the jump amount
+	sll $s1, $s1, 1		#otherwise, double the jump amount
 	j jump			#go back to jump
 
 gravity:
@@ -254,7 +321,213 @@ win_cond:
 	addi $t0, $t0, -256
 	j win_cond 
 no_win:	jr $ra
+
+
+enemy_contact:
+	li $v1, 0		#reset return value
+	#check for contact - if yes, hit
+	lw $t0, -780($s0)	#beside bottom row
+	beq $t0, e_body, hit
+	lw $t0, -748($s0)
+	beq $t0, e_body, hit
+	lw $t0, -2056($s0)	#beside bottom row
+	beq $t0, e_body, hit
+	lw $t0, -2032($s0)
+	beq $t0, e_body, hit
+	lw $t0, -2044($s0)	#beside bottom row
+	beq $t0, e_body, hit
 	
+	
+	#check legs for contact - if yes, kill
+#	lw $t0, 256($s0)
+#	beq $t0, e_body, kill      
+#	lw $t0, 264($s0) 
+#	beq $t0, e_body, kill 
+	#if none, jump back
+	jr $ra
+	
+hit:	#redraw character entirely in red
+	#pants
+	        li $t0, 0xff0000		
+	        sw $t0, 0($s0)
+	        sw $t0, 8($s0) 
+  
+	        #shirt
+	        sw $t0, -256($s0)	#row above feet
+	        sw $t0, -252($s0)
+	        sw $t0, -248($s0)
+	        sw $t0, -512($s0) 	#row 2 above feet
+	        sw $t0, -508($s0)
+	        sw $t0, -504($s0)
+	        
+	        #hair
+	        sw $t0, -776($s0)	#bottom row
+	        sw $t0, -752($s0)
+	        sw $t0, -1032($s0)	#second row
+	        sw $t0, -1008($s0)
+	        sw $t0, -1288($s0)	#third row
+	        sw $t0, -1264($s0)
+	        sw $t0, -1544($s0)	#fourth row
+	        sw $t0, -1520($s0)
+	        	
+	        sw $t0, -1776($s0)	#top row
+	        sw $t0, -1780($s0)
+	        sw $t0, -1784($s0)
+	        sw $t0, -1788($s0)
+	        sw $t0, -1792($s0)
+	        sw $t0, -1796($s0)
+	        sw $t0, -1800($s0)
+	        
+	        #face
+	        sw $t0, -1280($s0)	#eyes
+	        sw $t0, -1272($s0)
+	        
+	        sw $t0, -772($s0)	#bottom row of face
+	        sw $t0, -768($s0)	
+	        sw $t0, -764($s0)
+	        sw $t0, -760($s0)
+	        sw $t0, -756($s0)
+	        
+	        sw $t0, -1028($s0)	#second row of face
+	        sw $t0, -1024($s0) 
+	        sw $t0, -1020($s0)
+	        sw $t0, -1016($s0)
+	        sw $t0, -1012($s0)
+	        
+	        sw $t0, -1284($s0)	#third row of face
+	        sw $t0, -1276($s0)
+	        sw $t0, -1268($s0)
+
+	        sw $t0, -1540($s0)	#fourth row of face
+	        sw $t0, -1536($s0)	
+	        sw $t0, -1532($s0)
+	        sw $t0, -1528($s0)
+	        sw $t0, -1524($s0)
+	        
+	#decrease health
+	lw $t0, health
+	subi $t0, $t0, 1
+	sw $t0, health	
+				
+	#erase heart
+	li $t1, BASE_ADDRESS
+	addi $t1, $t1, 264
+	beq $t0, 2, erase_h3
+	beq $t0, 1, erase_h2			
+	beq $t0, $zero, erase_h
+
+erase_h3:
+	addi $t1, $t1, 32	
+erase_h2:
+	addi $t1, $t1, 32	
+	
+erase_h:li $t2, background	
+	sw $t2, ($t1)		#top row
+	sw $t2, 4($t1)
+	sw $t2, 12($t1)
+	sw $t2, 16($t1)
+	
+	sw $t2, 252($t1) 	#second row
+	sw $t2, 256($t1)
+	sw $t2, 260($t1)
+	sw $t2, 264($t1)
+	sw $t2, 268($t1)
+	sw $t2, 272($t1)
+	sw $t2, 276($t1)
+	
+	sw $t2, 508($t1) 	#third row
+	sw $t2, 512($t1)
+	sw $t2, 516($t1)
+	sw $t2, 520($t1)
+	sw $t2, 524($t1)
+	sw $t2, 528($t1)
+	sw $t2, 532($t1)
+	
+	sw $t2, 768($t1) 	#fourth row
+	sw $t2, 772($t1)
+	sw $t2, 776($t1)
+	sw $t2, 780($t1)
+	sw $t2, 784($t1)
+	
+	sw $t2, 1028($t1)	#fifth row
+	sw $t2, 1032($t1)
+	sw $t2, 1036($t1)
+	
+	sw $t2, 1288($t1)
+
+	li $v0, 32
+	li $a0, 200
+	syscall
+	
+	beq $t0, $zero, main
+	
+	#move enemy one in the opposite direction
+	la $t0, enemy2
+	lw $t1, 16($t0) #t1 = enemy2 direction
+	beq $t1, 1, ml
+	lw $t1, 4($t0)		#move one right
+	addi $t1, $t1, 3
+	sw $t1, 4($t0)
+	addi $t2, $zero, 1	#change direction to right
+	sw $t2, 16($t0)
+	j rd
+ml:  	lw $t1, 4($t0)		#move one left
+	subi $t1, $t1, 3
+	sw $t1, 4($t0)
+	move $t2, $zero		#change direction to left
+	sw $t2, 16($t0)
+	
+	#redraw in normal colours
+rd:	addi $sp, $sp, -4	#store $ra
+	sw $ra, ($sp)
+	move $a0, $zero
+	jal redraw_character
+	lw $ra, ($sp)
+	addi $sp, $sp, 4	#pop $ra
+	
+	li $v1, 1		#return 1 if hit (for jump function)
+	
+	jr $ra
+	
+	
+	
+	#lower health by 1, if health is 0 game over
+	
+#kill:	#erase enemy and set alive status to dead
+#	la $t0, enemies1
+#	add $t2, $t0, 16 #end of enemies1 array
+#e_loop:	lw $t1, ($t0)
+#	bne $zero, $t1, check_if_killed
+#	add $t0, $t0, 4
+#	bne $t0, $t2, e_loop	#check until the end of enemies1
+#	jr $ra
+	
+#check_if_killed:
+#	lw $t3, 4($t1)		#t3 = position of enemy at t1
+#	add $t4, $s0, 1544 	#t4 = potential pos of enemy
+#	beq $t3, $t4, set_dead
+#	add $t4, $s0, 1540 	#t4 = potential pos of enemy
+#	beq $t3, $t4, set_dead
+#	add $t4, $s0, 1536
+#	beq $t3, $t4, set_dead
+#	add $t4, $s0, 1532
+#	beq $t3, $t4, set_dead
+#	add $t4, $s0, 1528
+#	beq $t3, $t4, set_dead
+#	add $t4, $s0, 1524
+##	beq $t3, $t4, set_dead
+#	add $t4, $s0, 1520
+#	beq $t3, $t4, set_dead
+#	add $t0, $t0, 4
+#	bne $t0, $t2, e_loop	#check until the end of enemies1
+#	jr $ra
+#set_dead: #erase and set dead the enemy at t1
+#	sw $zero, ($t1) 	#set dead
+	#erase old enemy
+	
+	
+
+
 on_ground: #returns 1 if it's on a platform/ground, 0 if not
 	move $t0, $s0
 	addi $t0, $t0, 256 	#t0 = pixel under left foot
@@ -270,9 +543,177 @@ on_ground: #returns 1 if it's on a platform/ground, 0 if not
 	lw $t1, ($t0)		#t1 = colour of t0
 	beq $t1, platform, true	#if it's a platform/floor, react
 false:	li $v0, 0
-	j return	
+	jr $ra	
 true:	li $v0, 1
-return:	jr $ra
+	jr $ra
+
+
+
+
+move_enemies:	#takes the enemies list and corresponding platforms list as arguments
+		#moves the enemies one unit left or one unit right depending on position
+	la $t0, ($a0)	#$t0 = addr(enemies1)
+	lw $t1, 4($t0)  #t1 = addr(enemy2)
+	lw $t2, ($t1)
+	beq $t2, 1, moving	#if alive, move
+	jr $ra			#otherwise jump back
+moving:	lw $t2, 4($t1)  #t2 = position of enemy2
+	lw $t3, 16($t1)
+	
+	beq $t3, 1, e_right 	#if direction = 1 move right
+	subi $t5, $t2, 1    	#otherwise move left
+	addi $t2, $t2, 3
+	lw $t4, 8($t1)		#t4 = position of start of platform
+	bne $t5, $t4, e_move #if we're not at the start of the platform, continue
+	li $t3, 1		#if we are at the start of the platform, switch direction
+	sw $t3, 16($t1)		#store new direction
+	j e_move		#continue 
+	
+e_right:addi $t5, $t2, 1 #move position one byte right (1/4 a word)
+	subi $t2, $t2, 3 #store old position
+	lw $t4, 12($t1)		#t4 = position of end of platform
+	bne $t5, $t4, e_move #if we're not at the end of the platform, continue
+	sw $zero, 16($t1)		#if we are, store new direction
+	jr $ra				#and don't move
+	
+e_move:	sw $t5, 4($t1)  #update enemy2's position in data
+	andi $t4, $t5, 3 #t3 = t5 mod 4
+	beq $t4, 0, draw_enemies #if t5 is a multiple of 4, draw enemy at new position
+	#go to next enemy
+	la $t0, ($a0)	#$t0 = addr(enemies1)
+	lw $t1, 8($t0)  #t1 = addr(enemy2)
+	lw $t2, ($t1)
+	beq $t2, 1, moving	#if alive, move
+	jr $ra		#otherwise jump back to caller
+	
+draw_enemies:
+	#erase old enemy
+	li $t9, background	
+	sw $t9, ($t2)
+	#legs
+	sw $t9, ($t2)		
+	sw $t9, 8($t2)
+	sw $t9, 16($t2)
+	#body
+	sw $t9, -256($t2)	#bottom	
+	sw $t9, -252($t2)
+	sw $t9, -248($t2)
+	sw $t9, -244($t2)		
+	sw $t9, -240($t2)
+	
+	sw $t9, -512($t2)	#left side
+	sw $t9, -768($t2)
+	sw $t9, -1024($t2)
+			
+	sw $t9, -496($t2)	#right side
+	sw $t9, -752($t2)
+	sw $t9, -1008($t2)
+	
+	sw $t9, -1276($t2)	#top
+	sw $t9, -1272($t2)
+	sw $t9, -1268($t2)	
+	
+	#eye
+	li $t9, e_eye
+	sw $t9, -508($t2)	#left side
+	sw $t9, -764($t2)
+	sw $t9, -1020($t2)
+			
+	sw $t9, -500($t2)	#right side
+	sw $t9, -756($t2)
+	sw $t9, -1012($t2)
+	
+	sw $t9, -504($t2)	#middle
+	sw $zero, -760($t2)
+	sw $t9, -1016($t2)
+	
+	#redraw
+	li $t9, e_body 		
+	#legs
+	sw $t9, ($t5)		
+	sw $t9, 8($t5)
+	sw $t9, 16($t5)
+	#body
+	sw $t9, -256($t5)	#bottom row		
+	sw $t9, -252($t5)
+	sw $t9, -248($t5)
+	sw $t9, -244($t5)		
+	sw $t9, -240($t5)
+	
+	sw $t9, -512($t5)	#left side
+	sw $t9, -768($t5)
+	sw $t9, -1024($t5)
+			
+	sw $t9, -496($t5)	#right side
+	sw $t9, -752($t5)
+	sw $t9, -1008($t5)
+	
+	sw $t9, -1276($t5)	#top
+	sw $t9, -1272($t5)
+	sw $t9, -1268($t5)	
+	
+	#eye
+	li $t9, e_eye
+	sw $t9, -508($t5)	#left side
+	sw $t9, -764($t5)
+	sw $t9, -1020($t5)
+			
+	sw $t9, -500($t5)	#right side
+	sw $t9, -756($t5)
+	sw $t9, -1012($t5)
+	
+	sw $t9, -504($t5)	#middle
+	sw $zero, -760($t5)
+	sw $t9, -1016($t5)
+
+	jr $ra 
+
+
+draw_health:
+	la $t0, health		#get the number of health
+	lw $t0, ($t0)
+	li $t1, BASE_ADDRESS
+	addi $t1, $t1, 264	#first heart location
+	li $t2, heart_c		
+	
+draw_heart:
+	sw $t2, ($t1)		#top row
+	sw $t2, 4($t1)
+	sw $t2, 12($t1)
+	sw $t2, 16($t1)
+	
+	sw $t2, 252($t1) 	#second row
+	sw $t2, 256($t1)
+	sw $t2, 260($t1)
+	sw $t2, 264($t1)
+	sw $t2, 268($t1)
+	sw $t2, 272($t1)
+	sw $t2, 276($t1)
+	
+	sw $t2, 508($t1) 	#third row
+	sw $t2, 512($t1)
+	sw $t2, 516($t1)
+	sw $t2, 520($t1)
+	sw $t2, 524($t1)
+	sw $t2, 528($t1)
+	sw $t2, 532($t1)
+	
+	sw $t2, 768($t1) 	#fourth row
+	sw $t2, 772($t1)
+	sw $t2, 776($t1)
+	sw $t2, 780($t1)
+	sw $t2, 784($t1)
+	
+	sw $t2, 1028($t1)	#fifth row
+	sw $t2, 1032($t1)
+	sw $t2, 1036($t1)
+	
+	sw $t2, 1288($t1)	#sixth row
+	
+	subi $t0, $t0, 1
+	addi $t1, $t1, 32	#draw next heart 8 pixels to the right	
+	bnez $t0, draw_heart
+	jr $ra
 
 
 draw_goal:
@@ -521,9 +962,9 @@ redraw_character: #redraw(old pos, offset) erases the charater at old_pos and re
 		jr $ra
 	
 sleep:	
-	li $v0, 32
-	li $a0, 1
-	syscall
+	#li $v0, 32
+	#li $a0, 1
+	#syscall
 	j main_loop
 	
 end:	li $v0, 10 # terminate the program gracefully
