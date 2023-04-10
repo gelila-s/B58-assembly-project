@@ -73,35 +73,44 @@ health: 	.word 	3
 double_jump: 	.word	0:1
 
 level: 		.word 	0:4096
-current_level:  .word   1
+current_level:  .word   3
 
 #level one values
-platforms_lvl1: 	.word 	0:8 	#even indices are the top left corner of the platform, odd indices are the size of the
-				#platform at the index before (ex. a platform starts at platforms_lvl1[0] and is 
-				#platforms_lvl1[1] units long
-enemies_lvl1:	.word   0:4	#enemies[0] is the address of the enemy on platform[0]
+#platforms: 	.word 	0:8 	#even indices are the top left corner of the platform, odd indices are the size of the
+				#platform at the index before (ex. a platform starts at platforms[0] and is 
+				#platforms[1] units long
+#enemies:	.word   0:4	#enemies[0] is the address of the enemy on platform[0]
 				
-enemy2_lvl1:	.word	0:5	#enemy[0] is the alive status of the enemy 0 = dead, 1 = alive
-enemy3_lvl1:	.word 	0:5	#enemy[1] is the position of the enemy
+#enemy2:	.word	0:5	#enemy[0] is the alive status of the enemy 0 = dead, 1 = alive
+#enemy3:	.word 	0:5	#enemy[1] is the position of the enemy
 				#enemy[2] is the left end of the platform it is on
 				#enemy[3] is the right end of the platform it is on
 				#enemy[4] is the direction the enemy is moving in, 0 for left, 1 for right
 				
 #level two values
-platforms_lvl2: .word 	0:8 	
-enemies_lvl2:	.word   0:4	
+#platforms: .word 	0:8 	
+#enemies:	.word   0:4	
 
-enemy1_lvl2:	.word	0:5			
-enemy2_lvl2:	.word	0:5	
-enemy3_lvl2:	.word 	0:5
+#enemy1_lvl2:	.word	0:5			
+#enemy2:	.word	0:5	
+##enemy3:	.word 	0:5
 
 #level three values
-platforms_lvl3: .word 	0:8 	
-enemies_lvl3:	.word   0:4	
+#platforms: .word 	0:8 	
+#enemies:	.word   0:4	
 
-enemy1_lvl3:	.word	0:5			
-enemy2_lvl3:	.word	0:5	
-enemy3_lvl3:	.word 	0:5
+#enemy1_lvl3:	.word	0:5			
+#enemy2:	.word	0:5	
+#enemy3:	.word 	0:5
+
+
+#level values
+platforms: 	.word 	0:8 	
+enemies:	.word   0:4	
+
+enemy1:		.word	0:5			
+enemy2:		.word	0:5	
+enemy3:		.word 	0:5
 
 .text
 #t0, t1 - temp variables, #t2 - character position
@@ -163,7 +172,7 @@ main_loop:
 	
 	jal enemy_contact
 	
-	#la $a0, enemies_lvl1 #load enemies_lvl1 as argument for move_enemies
+	#la $a0, enemies #load enemies as argument for move_enemies
 
 	jal move_enemies
 	
@@ -242,7 +251,7 @@ jump:
 
 	li $a0, -256
 	jal redraw_character
-	#la $a0, enemies_lvl1 #load enemies_lvl1 as argument for move_enemies
+	#la $a0, enemies #load enemies as argument for move_enemies
 	#jal move_enemies
 	jal enemy_contact
 	beq $v1, 1, gravity	#end jump if enemy hit
@@ -281,7 +290,7 @@ next_level:
 	addi $t0, $t0, 1	#go to next level
 	sw $t0, current_level
 	ble $t0, 3, main	#if level 1, 2, or 3 go to main
-	j end			#otherwise end
+	j win			#otherwise win
 
 
 enemy_contact:
@@ -461,30 +470,33 @@ erase_h:li $t2, background
 	beq $t0, $zero, lose
 	
 	#move enemy one in the opposite direction
-	la $t0, enemy2_lvl1
+	la $t0, enemy2
 change_enemy:
 	li $t5, 4	#for calculating offset
-	lw $t1, 16($t0) 	#t1 = enemy2_lvl1 direction
+	lw $t1, 16($t0) 	#t1 = enemy2 direction
 	beq $t1, 1, ml
 	lw $t1, 4($t0)		#move one right
 	andi $t2, $t1, 3	#t2 = t1 mod 4
 	sub $t2, $t5, $t2
+	subi $t2, $t2, 1
 	add $t1, $t1, $t2
 	sw $t1, 4($t0)
 	addi $t2, $zero, 1	#change direction to right
 	sw $t2, 16($t0)
-	la $t3, enemy3_lvl1
-	beq $t0, $t3, rd	#if done for enemy2_lvl1, move to 
-	j ce3	#now do it for enemy3_lvl1
+	la $t3, enemy3
+	beq $t0, $t3, rd	#if done for enemy2, move to 
+	j ce3	#now do it for enemy3
 ml:  	lw $t1, 4($t0)		#move one left
 	andi $t2, $t1, 3	#t2 = t1 mod 4
-	#add $t2, $t5, $t2
+	sub $t2, $t5, $t2
+	subi $t2, $t2, 1
 	sub $t1, $t1, $t2
+	#subi
 	sw $t1, 4($t0)
 	move $t2, $zero		#change direction to left
 	sw $t2, 16($t0)
 	beq $t0, $t3, rd
-ce3:	la $t0, enemy3_lvl1
+ce3:	la $t0, enemy3
 	j change_enemy
 	
 	#redraw in normal colours
@@ -504,12 +516,12 @@ rd:	addi $sp, $sp, -4	#store $ra
 	#lower health by 1, if health is 0 game over
 	
 #kill:	#erase enemy and set alive status to dead
-#	la $t0, enemies_lvl1
-#	add $t2, $t0, 16 #end of enemies_lvl1 array
+#	la $t0, enemies
+#	add $t2, $t0, 16 #end of enemies array
 #e_loop:	lw $t1, ($t0)
 #	bne $zero, $t1, check_if_killed
 #	add $t0, $t0, 4
-#	bne $t0, $t2, e_loop	#check until the end of enemies_lvl1
+#	bne $t0, $t2, e_loop	#check until the end of enemies
 #	jr $ra
 	
 #check_if_killed:
@@ -529,7 +541,7 @@ rd:	addi $sp, $sp, -4	#store $ra
 #	add $t4, $s0, 1520
 #	beq $t3, $t4, set_dead
 #	add $t0, $t0, 4
-#	bne $t0, $t2, e_loop	#check until the end of enemies_lvl1
+#	bne $t0, $t2, e_loop	#check until the end of enemies
 #	jr $ra
 #set_dead: #erase and set dead the enemy at t1
 #	sw $zero, ($t1) 	#set dead
@@ -545,13 +557,7 @@ on_ground: #returns 1 if it's on a platform/ground, 0 if not
 	beq $t1, platform, true	#if it's a platform/floor, react
 	addi $t0, $t0, 8	#t0 = pixel under right foot
 	lw $t1, ($t0)		#t1 = colour of t0
-	bne $t1, platform, false#if it's a platform/floor, react
-	addi $t0, $t0, 256	#t0 = pixel two under right foot
-	lw $t1, ($t0)		#t1 = colour of t0
-	beq $t1, platform, true	#if it's a platform/floor, react
-	addi $t0, $t0, -8	#t0 = pixel two under left foot
-	lw $t1, ($t0)		#t1 = colour of t0
-	beq $t1, platform, true	#if it's a platform/floor, react
+	beq $t1, platform, true#if it's a platform/floor, react
 false:	li $v0, 0
 	jr $ra	
 true:	li $v0, 1
@@ -562,29 +568,9 @@ true:	li $v0, 1
 
 move_enemies:	#takes the enemies list and corresponding platforms list as arguments
 		#moves the enemies one unit left or one unit right depending on position
-	#la $t0, ($a0)	#$t0 = addr(enemies_lvl1)
-	lw $t0, current_level
-	beq $t0, 2, m_e_2
-	beq $t0, 3, m_e_3
-
-m_e_1:  la $t0, enemies_lvl1
-	lw $t1, 4($t0)  #t1 = addr(enemy2_lvl1)
+	la $t0, enemies
+	lw $t1, 4($t0)  #t1 = addr(enemy2)
 	lw $t2, ($t1)
-	j moving
-	#beq $t2, 1, moving	#if alive, move
-	#jr $ra			#otherwise jump back
-m_e_2:  la $t0, enemies_lvl2
-	lw $t1, 4($t0)  #t1 = addr(enemy2_lvl2)
-	lw $t2, ($t1)
-	j moving
-	#beq $t2, 1, moving	#if alive, move
-	#jr $ra			#otherwise jump back
-m_e_3:  la $t0, enemies_lvl3
-	lw $t1, 4($t0)  #t1 = addr(enemy2_lvl3)
-	lw $t2, ($t1)
-	#j moving
-	#beq $t2, 1, moving	#if alive, move
-	#jr $ra			#otherwise jump back
 	
 moving:	lw $t2, 4($t1)  #t2 = position of enemy
 	lw $t3, 16($t1) #t3 = direction fo the enemy
@@ -593,15 +579,15 @@ moving:	lw $t2, 4($t1)  #t2 = position of enemy
 	subi $t5, $t2, 1    	#otherwise move left
 	addi $t2, $t2, 3	#store the old position
 	lw $t4, 8($t1)		#t4 = position of start of platform
-	bne $t5, $t4, e_move #if we're not at the start of the platform, continue
+	bge $t5, $t4, e_move #if we're not at the start of the platform, continue
 	li $t3, 1		#if we are at the start of the platform, switch direction
 	sw $t3, 16($t1)		#store new direction
-	j e_move		#and move one more
+	jr $ra		#and dont move
 	
 e_right:addi $t5, $t2, 1 #move position one byte right (1/4 a word)
 	subi $t2, $t2, 3 #store old position
 	lw $t4, 12($t1)		#t4 = position of end of platform
-	bne $t5, $t4, e_move #if we're not at the end of the platform, continue
+	blt $t5, $t4, e_move #if we're not at the end of the platform, continue
 	sw $zero, 16($t1)		#if we are, store new direction
 	jr $ra				#and don't move
 	
@@ -609,8 +595,8 @@ e_move:	sw $t5, 4($t1)  	#update enemy's position in data
 	andi $t4, $t5, 3 	#t4 = t5 mod 4
 	beq $t4, 0, draw_enemies #if t5 is a multiple of 4, draw enemy at new position
 	#go to next enemy
-	#la $t0, ($a0)	#$t0 = addr(enemies_lvl1)
-	lw $t1, 8($t0)  #t1 = addr(enemy3_lvl1)
+	#la $t0, ($a0)	#$t0 = addr(enemies)
+	lw $t1, 8($t0)  #t1 = addr(enemy3)
 	lw $t2, ($t1)
 	beq $t2, 1, moving	#if alive, move
 	jr $ra		#otherwise jump back to caller
@@ -825,7 +811,7 @@ draw_p:	lw $t1, ($a0)		#start drawing platform from t1 = $a0[0] = top left corne
 	add $t6, $t6, $t5	   #t6 = level[start_pixel]
 	add $t5, $t6, $zero	   #t5 = level[start_pixel]
 	
-	li $t2, 2		#2 is the height of the platform
+	#li $t2, 1		#t2 is the height of the platform
 	lw $t3, 4($a0)		#t3 = $a0[1] = length of platform
 row:	sw $t0, 0($t1)		#draw one row of the platform
 	sw $t0, ($t6)		#store colour in level
@@ -833,12 +819,12 @@ row:	sw $t0, 0($t1)		#draw one row of the platform
 	addi $t6, $t6, 4	#move to next index in level array
 	addi $t3, $t3, -1
 	bnez $t3, row
-	lw $t1, ($a0)		#move to next row of the platform
-	addi $t1, $t1, 256
-	addi $t6, $t5, 256	
-	lw $t3, 4($a0)
-	addi $t2, $t2, -1
-	bnez $t2, row
+	#lw $t1, ($a0)		#move to next row of the platform
+	#addi $t1, $t1, 256
+	#addi $t6, $t5, 256	
+	#lw $t3, 4($a0)
+	#addi $t2, $t2, -1
+	#bnez $t2, row
 	subi $t4, $t4, 1
 	addi $a0, $a0, 8
 	bnez $t4, draw_p	#move to next platform in list	
@@ -1031,8 +1017,8 @@ redraw_character: #redraw(old pos, offset) erases the charater at old_pos and re
 	        #jump back to calling function	
 		jr $ra
 		
-lvl1:	#set up list of platforms_lvl1
-	la $t0, platforms_lvl1	#get address of the array
+lvl1:	#set up list of platforms
+	la $t0, platforms	#get address of the array
 	
 	 #first platform
 	li $t1, BASE_ADDRESS	
@@ -1071,17 +1057,17 @@ lvl1:	#set up list of platforms_lvl1
 	sw $t1, ($t0)		#store the fourth platform's width
 	
 	 #draw the platforms
-	la $a0, platforms_lvl1	#argument is platforms_lvl1
+	la $a0, platforms	#argument is platforms
 	jal draw_platforms	#call function
 	
 	
 	
 	#fill out the details of enemy2
-	la $t0, enemies_lvl1	#load adresses
-	la $t1, enemy2_lvl1
-	sw $t1, 4($t0)	#store the address of enemy2 in enemies_lvl1[1] (second element of the array)
+	la $t0, enemies	#load adresses
+	la $t1, enemy2
+	sw $t1, 4($t0)	#store the address of enemy2 in enemies[1] (second element of the array)
 	
-	la $t2, platforms_lvl1
+	la $t2, platforms
 	
 	li $t0, alive	#set status to alive
 	sw $t0, ($t1)	
@@ -1097,18 +1083,18 @@ lvl1:	#set up list of platforms_lvl1
 	li $t0, 1
 	sw $t0, 16($t1) #set direction to right
 	
-	#fill out the details of enemy3_lvl1
-	la $t0, enemies_lvl1	#load adresses
-	la $t1, enemy3_lvl1
-	sw $t1, 8($t0)	#store the address of enemy3_lvl1 in enemies_lvl1[2] (third element of the array)
+	#fill out the details of enemy3
+	la $t0, enemies	#load adresses
+	la $t1, enemy3
+	sw $t1, 8($t0)	#store the address of enemy3 in enemies[2] (third element of the array)
 	
-	la $t2, platforms_lvl1
+	la $t2, platforms
 	
 	li $t0, alive	#set status to alive
 	sw $t0, ($t1)	
 	lw $t0, 16($t2)  #t0 = position of platform3
 	subi $t0, $t0, 256  #set enemy2 on top of platform3
-	sw $t0, 4($t1)	#set enemy3_lvl1 position
+	sw $t0, 4($t1)	#set enemy3 position
 	sw $t0, 8($t1) 	#set left side of platform3
 	lw $t3, 20($t2) #get length of platform3
 	sll $t3, $t3, 2 #multiply length by 4
@@ -1127,7 +1113,7 @@ lvl1:	#set up list of platforms_lvl1
 	
 	j main_loop
 	
-lvl2:	la $t0, platforms_lvl2	#get address of the array
+lvl2:	la $t0, platforms	#get address of the array
 	
 	 #first platform
 	li $t1, BASE_ADDRESS	
@@ -1166,17 +1152,17 @@ lvl2:	la $t0, platforms_lvl2	#get address of the array
 	sw $t1, ($t0)		#store the fourth platform's width
 	
 	 #draw the platforms
-	la $a0, platforms_lvl2	#argument is platforms_lvl1
+	la $a0, platforms	#argument is platforms
 	jal draw_platforms	#call function
 	
 	
 	
 	#fill out the details of enemy2
-	la $t0, enemies_lvl2	#load adresses
-	la $t1, enemy2_lvl2
-	sw $t1, 4($t0)	#store the address of enemy2 in enemies_lvl1[1] (second element of the array)
+	la $t0, enemies	#load adresses
+	la $t1, enemy2
+	sw $t1, 4($t0)	#store the address of enemy2 in enemies[1] (second element of the array)
 	
-	la $t2, platforms_lvl2
+	la $t2, platforms
 	
 	li $t0, alive	#set status to alive
 	sw $t0, ($t1)	
@@ -1192,18 +1178,18 @@ lvl2:	la $t0, platforms_lvl2	#get address of the array
 	li $t0, 1
 	sw $t0, 16($t1) #set direction to right
 	
-	#fill out the details of enemy3_lvl1
-	la $t0, enemies_lvl2	#load adresses
-	la $t1, enemy3_lvl2
-	sw $t1, 8($t0)	#store the address of enemy3_lvl1 in enemies_lvl1[2] (third element of the array)
+	#fill out the details of enemy3
+	la $t0, enemies	#load adresses
+	la $t1, enemy3
+	sw $t1, 8($t0)	#store the address of enemy3 in enemies[2] (third element of the array)
 	
-	la $t2, platforms_lvl2
+	la $t2, platforms
 	
 	li $t0, alive	#set status to alive
 	sw $t0, ($t1)	
 	lw $t0, 16($t2)  #t0 = position of platform3
 	subi $t0, $t0, 256  #set enemy2 on top of platform3
-	sw $t0, 4($t1)	#set enemy3_lvl1 position
+	sw $t0, 4($t1)	#set enemy3 position
 	sw $t0, 8($t1) 	#set left side of platform3
 	lw $t3, 20($t2) #get length of platform3
 	sll $t3, $t3, 2 #multiply length by 4
@@ -1222,7 +1208,7 @@ lvl2:	la $t0, platforms_lvl2	#get address of the array
 	
 	j main_loop	
 	
-lvl3:	la $t0, platforms_lvl3	#get address of the array
+lvl3:	la $t0, platforms	#get address of the array
 	
 	 #first platform
 	li $t1, BASE_ADDRESS	
@@ -1260,17 +1246,17 @@ lvl3:	la $t0, platforms_lvl3	#get address of the array
 	sw $t1, ($t0)		#store the fourth platform's width
 	
 	 #draw the platforms
-	la $a0, platforms_lvl3	#argument is platforms_lvl1
+	la $a0, platforms	#argument is platforms
 	jal draw_platforms	#call function
 	
 	
 	
 	#fill out the details of enemy2
-	la $t0, enemies_lvl3	#load adresses
-	la $t1, enemy2_lvl3
-	sw $t1, 4($t0)	#store the address of enemy2 in enemies_lvl1[1] (second element of the array)
+	la $t0, enemies	#load adresses
+	la $t1, enemy2
+	sw $t1, 4($t0)	#store the address of enemy2 in enemies[1] (second element of the array)
 	
-	la $t2, platforms_lvl3
+	la $t2, platforms
 	
 	li $t0, alive	#set status to alive
 	sw $t0, ($t1)	
@@ -1286,18 +1272,18 @@ lvl3:	la $t0, platforms_lvl3	#get address of the array
 	li $t0, 1
 	sw $t0, 16($t1) #set direction to right
 	
-	#fill out the details of enemy3_lvl1
-	la $t0, enemies_lvl3	#load adresses
-	la $t1, enemy3_lvl3
-	sw $t1, 8($t0)	#store the address of enemy3_lvl1 in enemies_lvl1[2] (third element of the array)
+	#fill out the details of enemy3
+	la $t0, enemies	#load adresses
+	la $t1, enemy3
+	sw $t1, 8($t0)	#store the address of enemy3 in enemies[2] (third element of the array)
 	
-	la $t2, platforms_lvl3
+	la $t2, platforms
 	
 	li $t0, alive	#set status to alive
 	sw $t0, ($t1)	
 	lw $t0, 16($t2)  #t0 = position of platform3
 	subi $t0, $t0, 256  #set enemy2 on top of platform3
-	sw $t0, 4($t1)	#set enemy3_lvl1 position
+	sw $t0, 4($t1)	#set enemy3 position
 	sw $t0, 8($t1) 	#set left side of platform3
 	lw $t3, 20($t2) #get length of platform3
 	sll $t3, $t3, 2 #multiply length by 4
@@ -1323,9 +1309,213 @@ restart_game:
 	sw $t0, current_level
 	j main
 	
+	
 lose:	#show game over screen
+	li $t1, BASE_ADDRESS #start from top left corner
+	li $t6, num_pixels
+	li $t0, background
+lose_bg:sw $t0, 0($t1)
+	addi $t1, $t1, 4
+	addi $t6, $t6, -1
+	bnez $t6, lose_bg
+		
+	#write the words you lose
+	li $t1, BASE_ADDRESS
+	addi $t1, $t1, 5188   #start writing word here
+	
+	#Y
+	sw $zero, ($t1)
+	sw $zero, 8($t1)
+	sw $zero, 256($t1)
+	sw $zero, 264($t1)
+	sw $zero, 512($t1)
+	sw $zero, 516($t1)
+	sw $zero, 520($t1)
+	sw $zero, 772($t1)
+	sw $zero, 1028($t1)
+	#O
+	addi $t1, $t1, 16
+	sw $zero, ($t1)
+	sw $zero, 4($t1)
+	sw $zero, 8($t1)
+	sw $zero, 256($t1)
+	sw $zero, 264($t1)
+	sw $zero, 512($t1)
+	sw $zero, 520($t1)
+	sw $zero, 768($t1)
+	sw $zero, 776($t1)
+	sw $zero, 1024($t1)
+	sw $zero, 1028($t1)
+	sw $zero, 1032($t1)
+	#U
+	addi $t1, $t1, 16
+	sw $zero, ($t1)
+	sw $zero, 8($t1)
+	sw $zero, 256($t1)
+	sw $zero, 264($t1)
+	sw $zero, 512($t1)
+	sw $zero, 520($t1)
+	sw $zero, 768($t1)
+	sw $zero, 776($t1)
+	sw $zero, 1024($t1)
+	sw $zero, 1028($t1)
+	sw $zero, 1032($t1)
+	
+	#L
+	addi $t1, $t1, 32
+	sw $zero, ($t1)
+	sw $zero, 256($t1)
+	sw $zero, 512($t1)
+	sw $zero, 768($t1)
+	sw $zero, 1024($t1)
+	sw $zero, 1028($t1)
+	sw $zero, 1032($t1)
+	#O
+	addi $t1, $t1, 16
+	sw $zero, ($t1)
+	sw $zero, 4($t1)
+	sw $zero, 8($t1)
+	sw $zero, 256($t1)
+	sw $zero, 264($t1)
+	sw $zero, 512($t1)
+	sw $zero, 520($t1)
+	sw $zero, 768($t1)
+	sw $zero, 776($t1)
+	sw $zero, 1024($t1)
+	sw $zero, 1028($t1)
+	sw $zero, 1032($t1)
+	#S
+	addi $t1, $t1, 16
+	sw $zero, ($t1)
+	sw $zero, 4($t1)
+	sw $zero, 8($t1)
+	sw $zero, 256($t1)
+	sw $zero, 512($t1)
+	sw $zero, 516($t1)
+	sw $zero, 520($t1)
+	sw $zero, 776($t1)
+	sw $zero, 1024($t1)
+	sw $zero, 1028($t1)
+	sw $zero, 1032($t1)
+	#E
+	addi $t1, $t1, 16
+	sw $zero, ($t1)
+	sw $zero, 4($t1)
+	sw $zero, 8($t1)
+	sw $zero, 256($t1)
+	sw $zero, 512($t1)
+	sw $zero, 516($t1)
+	sw $zero, 768($t1)
+	sw $zero, 1024($t1)
+	sw $zero, 1028($t1)
+	sw $zero, 1032($t1)
+	
 	#check for keypress p and restart game if so
-	j restart_game
+	j check_restart
+	
+	
+win:	#show win screen
+	li $t1, BASE_ADDRESS #start from top left corner
+	li $t6, num_pixels
+	li $t0, background
+win_bg:	sw $t0, 0($t1)
+	addi $t1, $t1, 4
+	addi $t6, $t6, -1
+	bnez $t6, win_bg
+	
+	#write the words you win
+	li $t1, BASE_ADDRESS
+	addi $t1, $t1, 5192   #start writing word here
+	
+	#Y
+	sw $zero, ($t1)
+	sw $zero, 8($t1)
+	sw $zero, 256($t1)
+	sw $zero, 264($t1)
+	sw $zero, 512($t1)
+	sw $zero, 516($t1)
+	sw $zero, 520($t1)
+	sw $zero, 772($t1)
+	sw $zero, 1028($t1)
+	#O
+	addi $t1, $t1, 16
+	sw $zero, ($t1)
+	sw $zero, 4($t1)
+	sw $zero, 8($t1)
+	sw $zero, 256($t1)
+	sw $zero, 264($t1)
+	sw $zero, 512($t1)
+	sw $zero, 520($t1)
+	sw $zero, 768($t1)
+	sw $zero, 776($t1)
+	sw $zero, 1024($t1)
+	sw $zero, 1028($t1)
+	sw $zero, 1032($t1)
+	#U
+	addi $t1, $t1, 16
+	sw $zero, ($t1)
+	sw $zero, 8($t1)
+	sw $zero, 256($t1)
+	sw $zero, 264($t1)
+	sw $zero, 512($t1)
+	sw $zero, 520($t1)
+	sw $zero, 768($t1)
+	sw $zero, 776($t1)
+	sw $zero, 1024($t1)
+	sw $zero, 1028($t1)
+	sw $zero, 1032($t1)
+	
+	#W
+	addi $t1, $t1, 32
+	sw $zero, ($t1)
+	sw $zero, 16($t1)
+	sw $zero, 256($t1)
+	sw $zero, 272($t1)
+	sw $zero, 512($t1)
+	sw $zero, 520($t1)
+	sw $zero, 528($t1)
+	sw $zero, 768($t1)
+	sw $zero, 776($t1)
+	sw $zero, 784($t1)
+	sw $zero, 1024($t1)
+	sw $zero, 1028($t1)
+	sw $zero, 1036($t1)
+	sw $zero, 1040($t1)
+	#I
+	addi $t1, $t1, 24
+	sw $zero, ($t1)
+	sw $zero, 256($t1)
+	sw $zero, 512($t1)
+	sw $zero, 768($t1)
+	sw $zero, 1024($t1)
+	#N
+	addi $t1, $t1, 8
+	sw $zero, ($t1)
+	sw $zero, 256($t1)
+	sw $zero, 260($t1)
+	sw $zero, 512($t1)
+	sw $zero, 516($t1)
+	sw $zero, 768($t1)
+	sw $zero, 1024($t1)
+	addi $t1, $t1, 12
+	sw $zero, ($t1)
+	sw $zero, 256($t1)
+	sw $zero, 252($t1)
+	sw $zero, 512($t1)
+	sw $zero, 508($t1)
+	sw $zero, 768($t1)
+	sw $zero, 1024($t1)
+	
+	
+	j check_restart
+	
+check_restart:
+	li $t9, 0xffff0000
+	lw $t8, 0($t9)
+	bne $t8, 1, check_restart
+	lw $t4, 4($t9)
+	beq $t4, 0x70, restart_game 
+	j check_restart
 	
 sleep:	
 	li $v0, 32
