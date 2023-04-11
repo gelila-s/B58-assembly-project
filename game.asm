@@ -73,7 +73,7 @@ health: 	.word 	3
 double_jump: 	.word	0:1
 
 level: 		.word 	0:4096
-current_level:  .word   3
+current_level:  .word   1
 
 #level one values
 #platforms: 	.word 	0:8 	#even indices are the top left corner of the platform, odd indices are the size of the
@@ -162,32 +162,27 @@ bottom:	sw $t0, 0($t1)
 	
 	
 main_loop:
+	jal enemy_contact
+	
+	#la $a0, enemies #load enemies as argument for move_enemies
+	jal move_enemies
+	jal check_win
 	
 	#Check for keyboard input.
 	li $t9, 0xffff0000
 	lw $t8, 0($t9)
 	beq $t8, 1, keypress_happened
 	
-	jal check_win
-	
-	jal enemy_contact
-	
-	#la $a0, enemies #load enemies as argument for move_enemies
-
-	jal move_enemies
-	
 	#Figure out if the player character is standing on a platform.
 		#check if either foot is above a unit with colour platform
 		#left foot is at position, right foot is at position+8
+		
 	jal on_ground
 	beq $v0, 1, sleep
 	
-	#Update player location, enemies, platforms, power ups, etc.
 	j gravity	#if player isnt on a platform, gravity to bottom row
 	
 	
-	#Check for various collisions (e.g., between player and enemies).
-
 	j sleep
 	
    
@@ -252,7 +247,7 @@ jump:
 	li $a0, -256
 	jal redraw_character
 	#la $a0, enemies #load enemies as argument for move_enemies
-	#jal move_enemies
+	jal move_enemies
 	jal enemy_contact
 	beq $v1, 1, gravity	#end jump if enemy hit
 	subi $s1, $s1, 256
@@ -276,10 +271,12 @@ gravity:
 	
 check_win: #checks if the player has won
 	move $t0, $s0		#t0 holds character position
-	addi $t0, $t0, -752 	#start from bottom right corner of head & check right side
-	addi $t2, $s0, -1776	#end at top right corner of head
+	add $t0, $t0, $zero 	#start from bottom corner of side of body
+	addi $t2, $t0, -512	#end at top corner of side of body
 win_cond:
-	lw $t1, 4($t0) 	#check bit beside body
+	lw $t1, -4($t0) 	#check bit beside left side of body
+	beq $t1, goal_c, next_level #replace end with win screen
+	lw $t1, 12($t0) 	#check bit beside right side of body
 	beq $t1, goal_c, next_level #replace end with win screen
 	beq $t0, $t2, no_win
 	addi $t0, $t0, -256
@@ -470,33 +467,50 @@ erase_h:li $t2, background
 	beq $t0, $zero, lose
 	
 	#move enemy one in the opposite direction
-	la $t0, enemy2
+	la $t8, enemy2
 change_enemy:
 	li $t5, 4	#for calculating offset
-	lw $t1, 16($t0) 	#t1 = enemy2 direction
+	lw $t1, 16($t8) 	#t1 = enemy2 direction
 	beq $t1, 1, ml
-	lw $t1, 4($t0)		#move one right
-	andi $t2, $t1, 3	#t2 = t1 mod 4
-	sub $t2, $t5, $t2
-	subi $t2, $t2, 1
-	add $t1, $t1, $t2
-	sw $t1, 4($t0)
-	addi $t2, $zero, 1	#change direction to right
-	sw $t2, 16($t0)
-	la $t3, enemy3
-	beq $t0, $t3, rd	#if done for enemy2, move to 
-	j ce3	#now do it for enemy3
-ml:  	lw $t1, 4($t0)		#move one left
+	lw $t1, 4($t8)		#move one right
 	andi $t2, $t1, 3	#t2 = t1 mod 4
 	sub $t2, $t5, $t2
 	subi $t2, $t2, 1
 	sub $t1, $t1, $t2
-	#subi
-	sw $t1, 4($t0)
+	sw $t1, 4($t8)
+	addi $t2, $zero, 1	#change direction to right
+	sw $t2, 16($t8)
+	
+	#move enemies
+	addi $sp, $sp, -4	#store $ra
+	sw $ra, ($sp)
+	jal move_enemies
+	lw $ra, ($sp)
+	addi $sp, $sp, 4	#pop $ra
+	
+	
+	la $t3, enemy3
+	beq $t8, $t3, rd	#if done for enemy2, move to 
+	j ce3	#now do it for enemy3
+ml:  	lw $t1, 4($t8)		#move one left
+	andi $t2, $t1, 3	#t2 = t1 mod 4
+	sub $t2, $t5, $t2
+	addi $t2, $t2, 1
+	add $t1, $t1, $t2
+	sw $t1, 4($t8)
 	move $t2, $zero		#change direction to left
-	sw $t2, 16($t0)
-	beq $t0, $t3, rd
-ce3:	la $t0, enemy3
+	sw $t2, 16($t8)
+	
+	#move enemies
+	addi $sp, $sp, -4	#store $ra
+	sw $ra, ($sp)
+	jal move_enemies
+	lw $ra, ($sp)
+	addi $sp, $sp, 4	#pop $ra
+	
+	
+	beq $t8, $t3, rd
+ce3:	la $t8, enemy3
 	j change_enemy
 	
 	#redraw in normal colours
@@ -596,40 +610,53 @@ e_move:	sw $t5, 4($t1)  	#update enemy's position in data
 	beq $t4, 0, draw_enemies #if t5 is a multiple of 4, draw enemy at new position
 	#go to next enemy
 	#la $t0, ($a0)	#$t0 = addr(enemies)
-	lw $t1, 8($t0)  #t1 = addr(enemy3)
+	lw $t6, 8($t0)  #t1 = addr(enemy3)
+	beq $t6, $t1, no_move	#if we've just finished e3, stop
+	move $t1, $t6
 	lw $t2, ($t1)
 	beq $t2, 1, moving	#if alive, move
-	jr $ra		#otherwise jump back to caller
+no_move:jr $ra		#otherwise jump back to caller
 	
 draw_enemies:
 	#erase old enemy
 	li $t9, background	
 	sw $t9, ($t2)
 	#legs
+	sw $t9, -4($t2)
 	sw $t9, ($t2)		
 	sw $t9, 8($t2)
 	sw $t9, 16($t2)
+	sw $t9, 20($t2)
 	#body
+	sw $t9, -260($t2)
 	sw $t9, -256($t2)	#bottom	
 	sw $t9, -252($t2)
 	sw $t9, -248($t2)
 	sw $t9, -244($t2)		
 	sw $t9, -240($t2)
+	sw $t9, -236($t2)
 	
 	sw $t9, -512($t2)	#left side
 	sw $t9, -768($t2)
 	sw $t9, -1024($t2)
+	sw $t9, -516($t2)	#left side
+	sw $t9, -772($t2)
+	sw $t9, -1028($t2)
 			
 	sw $t9, -496($t2)	#right side
 	sw $t9, -752($t2)
 	sw $t9, -1008($t2)
+	sw $t9, -492($t2)	#right side
+	sw $t9, -748($t2)
+	sw $t9, -1004($t2)
 	
 	sw $t9, -1276($t2)	#top
 	sw $t9, -1272($t2)
-	sw $t9, -1268($t2)	
+	sw $t9, -1268($t2)
+	sw $t9, -1280($t2)	#top
+	sw $t9, -1264($t2)	
 	
 	#eye
-	li $t9, e_eye
 	sw $t9, -508($t2)	#left side
 	sw $t9, -764($t2)
 	sw $t9, -1020($t2)
@@ -681,7 +708,56 @@ draw_enemies:
 	sw $zero, -760($t5)
 	sw $t9, -1016($t5)
 
+	lw $t6, 8($t0)  #t1 = addr(enemy3)
+	beq $t6, $t1, no_move	#if we've just finished e3, stop
+	move $t1, $t6
+	lw $t2, ($t1)
+	beq $t2, 1, moving	#if alive, move
+
 	jr $ra 
+	
+erase_enemy:
+	#erase old enemy at pos $a0
+	move $t2, $a0
+	li $t9, background	
+	sw $t9, ($t2)
+	#legs
+	sw $t9, ($t2)		
+	sw $t9, 8($t2)
+	sw $t9, 16($t2)
+	#body
+	sw $t9, -256($t2)	#bottom	
+	sw $t9, -252($t2)
+	sw $t9, -248($t2)
+	sw $t9, -244($t2)		
+	sw $t9, -240($t2)
+	
+	sw $t9, -512($t2)	#left side
+	sw $t9, -768($t2)
+	sw $t9, -1024($t2)
+			
+	sw $t9, -496($t2)	#right side
+	sw $t9, -752($t2)
+	sw $t9, -1008($t2)
+	
+	sw $t9, -1276($t2)	#top
+	sw $t9, -1272($t2)
+	sw $t9, -1268($t2)	
+	
+	#eye
+	sw $t9, -508($t2)	#left side
+	sw $t9, -764($t2)
+	sw $t9, -1020($t2)
+			
+	sw $t9, -500($t2)	#right side
+	sw $t9, -756($t2)
+	sw $t9, -1012($t2)
+	
+	sw $t9, -504($t2)	#middle
+	sw $zero, -760($t2)
+	sw $t9, -1016($t2)
+	
+	jr $ra
 
 
 draw_health:
@@ -776,24 +852,24 @@ draw_goal: #takes three arguements a0 = top left corner of goal, a1 = length of 
 	#addi $t1, $t1, 2276	#start 1020 away from BASE_ADDRESS
 	move $t1, $a0
 	
-	#sub $t5, $t1, BASE_ADDRESS #calculate offset from first pixel
-	#la $t6, level
-	#add $t6, $t6, $t5	   #t6 = level[start_pixel]
+	sub $t5, $t1, BASE_ADDRESS #calculate offset from first pixel
+	la $t6, level
+	add $t6, $t6, $t5	   #t6 = level[start_pixel]
 	
 	#li $t2, 9		#t2 = 6 is the height of the goal
 	#li $t3, 6		#t3 = 6 is the width of the goal
 	move $t2, $a1
 	move $t3, $a2
 goal_rp:sw $t0, 0($t1)		#draw one row of the platform
-	#sw $t0, ($t6)		#store colour in level
+	sw $t0, ($t6)		#store colour in level
 	addi $t1, $t1, 4
-	#addi $t6, $t6, 4	#move to next index in level array
+	addi $t6, $t6, 4	#move to next index in level array
 	addi $t3, $t3, -1
 	bnez $t3, goal_rp
 	subi $t1, $t1, 24
 	addi $t1, $t1, 256
-	#subi $t6, $t6, 24	#next row in level array
-	#addi $t6, $t6, 256	
+	subi $t6, $t6, 24	#next row in level array
+	addi $t6, $t6, 256	
 	move $t3, $a2
 	addi $t2, $t2, -1
 	bnez $t2, goal_rp
@@ -1212,7 +1288,7 @@ lvl3:	la $t0, platforms	#get address of the array
 	
 	 #first platform
 	li $t1, BASE_ADDRESS	
-	addi $t1, $t1, 2480
+	addi $t1, $t1, 2992
 	sw $t1, ($t0)		#store the first platform's address
 	addi $t0, $t0, 4
 	li $t1, 20
@@ -1220,7 +1296,7 @@ lvl3:	la $t0, platforms	#get address of the array
 	
 	 #second platform
 	li $t1, BASE_ADDRESS	
-	addi $t1, $t1, 6656
+	addi $t1, $t1, 6664
 	addi $t0, $t0, 4
 	sw $t1 ($t0)		#store the second platform's address
 	addi $t0, $t0, 4
@@ -1229,7 +1305,7 @@ lvl3:	la $t0, platforms	#get address of the array
 	
 	 #third platform
 	li $t1, BASE_ADDRESS	
-	addi $t1, $t1, 9116
+	addi $t1, $t1, 9628
 	addi $t0, $t0, 4
 	sw $t1, ($t0)		#store the third platform's address
 	addi $t0, $t0, 4
@@ -1295,8 +1371,8 @@ lvl3:	la $t0, platforms	#get address of the array
 	
 	#draw goal
 	li $a0, BASE_ADDRESS
-	addi $a0, $a0, 484
-	li $a1, 8
+	addi $a0, $a0, 740
+	li $a1, 9
 	li $a2, 6
 	jal draw_goal
 	
@@ -1500,12 +1576,11 @@ win_bg:	sw $t0, 0($t1)
 	addi $t1, $t1, 12
 	sw $zero, ($t1)
 	sw $zero, 256($t1)
-	sw $zero, 252($t1)
 	sw $zero, 512($t1)
 	sw $zero, 508($t1)
 	sw $zero, 768($t1)
+	sw $zero, 764($t1)
 	sw $zero, 1024($t1)
-	
 	
 	j check_restart
 	
